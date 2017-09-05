@@ -11,7 +11,7 @@ func TestFmt(t *testing.T) {
 	decode := func(s string) map[string]interface{} {
 		var m map[string]interface{}
 		if err := json.NewDecoder(strings.NewReader(s)).Decode(&m); err != nil {
-			t.Fatalf("got error %s want nil")
+			t.Fatalf("got error %s want nil", err)
 		}
 		return m
 	}
@@ -21,16 +21,19 @@ func TestFmt(t *testing.T) {
 	"ignore": "test",
 	"package": [
 		{
-			"path": "appengine",
-			"revision": ""
+			"checksum": "a",
+			"path": "x",
+			"revision": true
 		},
 		{
-			"path": "appengine_internal",
-			"revision": ""
+			"checksum": "b",
+			"path": "y",
+			"revision": false
 		},
 		{
-			"path": "appengine_internal/base",
-			"revision": ""
+			"checksum": "c",
+			"path": "z/x",
+			"revision": true
 		}
 	]
 }`
@@ -38,11 +41,12 @@ func TestFmt(t *testing.T) {
 	"comment": "",
 	"ignore": "test",
 	"package": [
-		{"path":"appengine","revision":""},
-		{"path":"appengine_internal","revision":""},
-		{"path":"appengine_internal/base","revision":""}
+		{"path":"x","checksum":"a","revision":true},
+		{"path":"y","checksum":"b","revision":false},
+		{"path":"z/x","checksum":"c","revision":true}
 	]
-}`
+}
+`
 
 	got, err := FormatString(in)
 	if err != nil {
@@ -58,5 +62,54 @@ func TestFmt(t *testing.T) {
 	if got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
+}
 
+func TestPkgSort(t *testing.T) {
+	in := `{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksum": "b",
+			"path": "y",
+			"revision":false
+		},
+		{
+			"checksum": "a",
+			"path": "x",
+			"revision":true
+		},
+		{
+			"checksum": "c",
+			"path": "z/x",
+			"revision":true
+		}
+	]
+}`
+	want := `{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{"path":"x","checksum":"a","revision":true},
+		{"path":"y","checksum":"b","revision":false},
+		{"path":"z/x","checksum":"c","revision":true}
+	]
+}
+`
+
+	got, err := FormatString(in)
+	if err != nil {
+		t.Fatalf("got %v want nil", err)
+	}
+
+	// verify packages are sorted
+	if got != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
+	}
+
+	// verify json is still legal
+	var v interface{}
+	if err := json.Unmarshal([]byte(got), &v); err != nil {
+		t.Fatalf("json.Unmarshal failed: %s", err)
+	}
 }

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 )
 
 func FormatString(s string) (string, error) {
@@ -44,22 +46,72 @@ func FormatIndent(b []byte, prefix, indent string) ([]byte, error) {
 		return nil, fmt.Errorf("cannot render to JSON: %s", err)
 	}
 
-	// render package with one line per entry
+	// render packages with one line per entry
 	var pb bytes.Buffer
-	pb.WriteString("\"package\": [\n")
-	for i, x := range p {
-		b, _ := json.Marshal(x)
-		pb.WriteString(indent)
-		pb.WriteString(indent)
-		pb.Write(b)
-		if i < len(p)-1 {
-			pb.WriteString(",")
+	var pkgs []string
+	for _, x := range p {
+		// sort map keys and make "path" first element
+		pm := x.(map[string]interface{})
+		var keys []string
+		for k := range pm {
+			if k == "path" {
+				continue
+			}
+			keys = append(keys, k)
 		}
-		pb.WriteString("\n")
+		sort.Strings(keys)
+		keys = append([]string{"path"}, keys...)
+
+		// render package entry
+		pb.Reset()
+		pb.WriteString(indent)
+		pb.WriteString(indent)
+		pb.WriteString(`{`)
+		for j, k := range keys {
+			v := pm[k]
+			pb.WriteString(`"`)
+			pb.WriteString(k)
+			pb.WriteString(`":`)
+			switch vv := v.(type) {
+			case string:
+				pb.WriteRune('"')
+				pb.WriteString(vv)
+				pb.WriteRune('"')
+			case bool:
+				if vv {
+					pb.WriteString("true")
+				} else {
+					pb.WriteString("false")
+				}
+			default:
+				panic("unknown type")
+			}
+			if j < len(keys)-1 {
+				pb.WriteString(`,`)
+			}
+		}
+		pb.WriteString("}")
+		pkgs = append(pkgs, pb.String())
 	}
+
+	// sort package entries by path
+	sort.Strings(pkgs)
+
+	// render "package" array
+	pb.Reset()
+	pb.WriteString("\"package\": [\n")
+	pb.WriteString(strings.Join(pkgs, ",\n"))
+	pb.WriteString("\n")
 	pb.WriteString(indent)
 	pb.WriteString("]")
 
 	// replace "package": [] with new content
-	return bytes.Replace(out, []byte(`"package": []`), pb.Bytes(), 1), nil
+	out = bytes.Replace(out, []byte(`"package": []`), pb.Bytes(), 1)
+
+	// ensure that file ends with new line
+	if !bytes.HasSuffix(out, []byte{'\n'}) {
+		out = append(out, '\n')
+	}
+
+	return out, nil
 }
