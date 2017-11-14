@@ -27,6 +27,10 @@ func main() {
 		if err != nil {
 			log.Print("Error formatting %s: %s", f, err)
 			continue
+		} else {
+			// Add the ending newline because json.Marshall[Indent]()
+			// strips it.
+			b = append(b, '\n')
 		}
 		if err := ioutil.WriteFile(f, b, 0644); err != nil {
 			log.Print("Error writing %s: %s", f, err)
